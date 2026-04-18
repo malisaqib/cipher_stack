@@ -148,6 +148,45 @@ export default function NodeCard({
             />
           </label>
         )}
+
+        {node.type === "vigenere" && (
+          <label className="text-[11px] uppercase tracking-wider text-slate-400">
+            Keyword
+            <input
+              type="text"
+              value={node.config.key ?? ""}
+              onChange={(e) => onConfigChange("key", e.target.value)}
+              placeholder="Enter keyword"
+              className="mt-1 w-full rounded-lg border border-cyan-500/30 bg-slate-950 px-2 py-2 text-sm text-slate-100 outline-none focus:border-emerald-300"
+            />
+          </label>
+        )}
+
+        {node.type === "railFence" && (
+          <label className="text-[11px] uppercase tracking-wider text-slate-400">
+            Rails
+            <input
+              type="number"
+              min={2}
+              value={node.config.rails ?? 3}
+              onChange={(e) => onConfigChange("rails", e.target.value)}
+              className="mt-1 w-full rounded-lg border border-cyan-500/30 bg-slate-950 px-2 py-2 text-sm text-slate-100 outline-none focus:border-emerald-300"
+            />
+          </label>
+        )}
+
+        {node.type === "columnar" && (
+          <label className="text-[11px] uppercase tracking-wider text-slate-400">
+            Columnar Key
+            <input
+              type="text"
+              value={node.config.key ?? ""}
+              onChange={(e) => onConfigChange("key", e.target.value)}
+              placeholder="Enter column key"
+              className="mt-1 w-full rounded-lg border border-cyan-500/30 bg-slate-950 px-2 py-2 text-sm text-slate-100 outline-none focus:border-emerald-300"
+            />
+          </label>
+        )}
       </div>
 
       <Motion.div

@@ -21,6 +21,7 @@ import {
   runPipeline,
   runPipelineWithSteps,
   runReversePipeline,
+  runReversePipelineWithSteps,
   validatePipeline,
 } from "./utils/ciphers";
 
@@ -52,6 +53,10 @@ export default function App() {
 
   const [liveMode, setLiveMode] = useState(true);
   const [showSteps, setShowSteps] = useState(true);
+  const [mode, setMode] = useState("encrypt");
+  const [decryptInput, setDecryptInput] = useState("");
+  const [showDecryptionSteps, setShowDecryptionSteps] = useState(false);
+  const [decryptionSteps, setDecryptionSteps] = useState([]);
 
   const [steps, setSteps] = useState([]);
   const [previewByNode, setPreviewByNode] = useState({});
@@ -81,6 +86,7 @@ export default function App() {
       if (issues.length > 0) {
         setError(issues[0]);
         setSteps([]);
+        setDecryptionSteps([]);
         setPreviewByNode({});
         setEncryptedOutput("");
         setDecryptedOutput("");
@@ -102,6 +108,7 @@ export default function App() {
           setPreviewByNode(buildPreviewMap(result.steps));
           setEncryptedOutput(encrypted);
           setDecryptedOutput(decrypted);
+          setDecryptionSteps([]);
           setActiveIndex(-1);
           setPhase("idle");
           setIsRunning(false);
@@ -110,6 +117,7 @@ export default function App() {
 
         setIsRunning(true);
         setSteps(result.steps);
+        setDecryptionSteps([]);
         setPreviewByNode({});
         setEncryptedOutput("");
         setDecryptedOutput("");
@@ -165,14 +173,39 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (!liveMode) return;
+    if (!liveMode || mode !== "encrypt") return;
 
     const t = setTimeout(() => {
       execute({ animated: true });
     }, 300);
 
     return () => clearTimeout(t);
-  }, [liveMode, inputText, nodes, execute]);
+  }, [liveMode, inputText, nodes, execute, mode]);
+
+  function executeDecryption() {
+    const source = decryptInput.trim() || encryptedOutput;
+    if (!source) {
+      setError("Paste or generate encrypted text before decrypting.");
+      setDecryptedOutput("");
+      setDecryptionSteps([]);
+      return;
+    }
+
+    try {
+      const reverse = runReversePipelineWithSteps(source, nodes);
+      setError("");
+      setDecryptedOutput(reverse.final);
+      setDecryptionSteps(reverse.steps);
+
+      if (reverse.final !== inputText) {
+        setError("Round-trip mismatch: decrypted text does not match original input.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Decryption failed.");
+      setDecryptedOutput("");
+      setDecryptionSteps([]);
+    }
+  }
 
   function addNode() {
     setNodes((prev) => [...prev, createNode(selectedType)]);
@@ -230,7 +263,9 @@ export default function App() {
   function resetPipeline() {
     setNodes(getDefaultPipeline());
     setInputText("hello");
+    setDecryptInput("");
     setSteps([]);
+    setDecryptionSteps([]);
     setPreviewByNode({});
     setEncryptedOutput("");
     setDecryptedOutput("");
@@ -305,21 +340,31 @@ export default function App() {
             >
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-cyan-200">Input</h2>
-                <label className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/35 bg-slate-800/70 px-3 py-2 text-[11px] uppercase tracking-wider text-cyan-200">
-                  <input
-                    type="checkbox"
-                    checked={liveMode}
-                    onChange={(e) => setLiveMode(e.target.checked)}
-                    className="accent-emerald-400"
-                  />
-                  Live Mode {liveMode ? "ON" : "OFF"}
-                </label>
+                {mode === "encrypt" && (
+                  <label className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/35 bg-slate-800/70 px-3 py-2 text-[11px] uppercase tracking-wider text-cyan-200">
+                    <input
+                      type="checkbox"
+                      checked={liveMode}
+                      onChange={(e) => setLiveMode(e.target.checked)}
+                      className="accent-emerald-400"
+                    />
+                    Live Mode {liveMode ? "ON" : "OFF"}
+                  </label>
+                )}
               </div>
 
               <textarea
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Enter your secret message..."
+                value={mode === "encrypt" ? inputText : decryptInput}
+                onChange={(e) =>
+                  mode === "encrypt"
+                    ? setInputText(e.target.value)
+                    : setDecryptInput(e.target.value)
+                }
+                placeholder={
+                  mode === "encrypt"
+                    ? "Enter your secret message..."
+                    : "Paste encrypted output to decrypt..."
+                }
                 className="h-44 w-full rounded-xl border border-cyan-500/25 bg-slate-950/70 p-3 text-slate-50 outline-none transition focus:border-emerald-300"
               />
 
@@ -357,14 +402,42 @@ export default function App() {
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-semibold text-cyan-200">Pipeline</h2>
                 <div className="flex flex-wrap gap-2">
+                  <div className="inline-flex overflow-hidden rounded-xl border border-cyan-400/35">
+                    <button
+                      type="button"
+                      onClick={() => setMode("encrypt")}
+                      className={`px-3 py-2 text-xs uppercase tracking-wider transition ${
+                        mode === "encrypt"
+                          ? "bg-emerald-400/20 text-emerald-200"
+                          : "bg-slate-800/70 text-slate-300"
+                      }`}
+                    >
+                      Encrypt
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode("decrypt")}
+                      className={`px-3 py-2 text-xs uppercase tracking-wider transition ${
+                        mode === "decrypt"
+                          ? "bg-cyan-400/20 text-cyan-100"
+                          : "bg-slate-800/70 text-slate-300"
+                      }`}
+                    >
+                      Decrypt
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => execute({ animated: true })}
-                    disabled={!canExecute || isRunning}
+                    onClick={() =>
+                      mode === "encrypt"
+                        ? execute({ animated: true })
+                        : executeDecryption()
+                    }
+                    disabled={mode === "encrypt" ? !canExecute || isRunning : !canExecute}
                     className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/45 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200 transition disabled:cursor-not-allowed disabled:opacity-40 hover:enabled:shadow-[0_0_14px_rgba(34,197,94,0.35)]"
                   >
                     <Play size={16} />
-                    {isRunning ? "Running..." : "Encrypt"}
+                    {mode === "encrypt" ? (isRunning ? "Running..." : "Encrypt") : "Decrypt"}
                   </button>
 
                   <label className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/35 bg-slate-800/70 px-3 py-2 text-[11px] uppercase tracking-wider text-cyan-200">
@@ -378,6 +451,18 @@ export default function App() {
                   </label>
                 </div>
               </div>
+
+              {mode === "decrypt" && (
+                <label className="mb-4 inline-flex items-center gap-2 rounded-xl border border-cyan-400/35 bg-slate-800/70 px-3 py-2 text-[11px] uppercase tracking-wider text-cyan-200">
+                  <input
+                    type="checkbox"
+                    checked={showDecryptionSteps}
+                    onChange={(e) => setShowDecryptionSteps(e.target.checked)}
+                    className="accent-emerald-400"
+                  />
+                  Show Decryption Steps
+                </label>
+              )}
 
               {!canExecute && (
                 <div className="mb-4 rounded-lg border border-amber-400/50 bg-amber-400/10 p-3 text-sm text-amber-200">
@@ -403,6 +488,19 @@ export default function App() {
                   <DebugPanel key="debug-panel" steps={steps} />
                 ) : null}
               </AnimatePresence>
+
+              {mode === "decrypt" && showDecryptionSteps && decryptionSteps.length > 0 && (
+                <div className="mt-4 rounded-xl border border-cyan-500/20 bg-slate-950/70 p-3">
+                  <p className="text-xs uppercase tracking-wider text-cyan-300">Decryption Steps</p>
+                  <ol className="mt-2 space-y-1">
+                    {decryptionSteps.map((step, index) => (
+                      <li key={step.id} className="font-mono text-xs text-slate-300">
+                        Step {index + 1}: {step.label}{" -> "}{step.output || "<empty>"}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
             </Motion.article>
 
             <Motion.article
@@ -416,7 +514,7 @@ export default function App() {
               </label>
               <textarea
                 readOnly
-                value={encryptedOutput}
+                value={mode === "decrypt" ? decryptInput || encryptedOutput : encryptedOutput}
                 className="mt-1 h-36 w-full rounded-xl border border-cyan-500/25 bg-slate-950/70 p-3 font-mono text-sm text-emerald-200"
               />
 
